@@ -280,6 +280,51 @@ class MainThing {
     "Brave Browser",
   ]
 
+  // Gecko-based browsers have no scripting interface for tabs, but expose the
+  // current page URL on their accessibility tree's AXWebArea node
+  let FIREFOX_BROWSERS = [
+    "Firefox",
+    "Firefox Developer Edition",
+    "Firefox Nightly",
+    "Zen",
+    "Zen Browser",
+    "LibreWolf",
+    "Waterfox",
+    "Floorp",
+  ]
+
+  // breadth-first search of the window's accessibility tree for an AXWebArea
+  // node and its AXURL attribute; capped so a pathological tree can't stall a poll
+  func geckoURL(window: AXUIElement) -> String? {
+    var queue: [AXUIElement] = [window]
+    var visited = 0
+    while !queue.isEmpty && visited < 384 {
+      let element = queue.removeFirst()
+      visited += 1
+
+      var roleRef: AnyObject?
+      AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)
+      if roleRef as? String == "AXWebArea" {
+        var urlRef: AnyObject?
+        AXUIElementCopyAttributeValue(element, "AXURL" as CFString, &urlRef)
+        if let url = urlRef as? NSURL {
+          return url.absoluteString
+        }
+        if let url = urlRef as? String {
+          return url
+        }
+        return nil
+      }
+
+      var childrenRef: AnyObject?
+      AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef)
+      if let children = childrenRef as? [AXUIElement] {
+        queue.append(contentsOf: children)
+      }
+    }
+    return nil
+  }
+
   @objc func pollActiveWindow() {
     debug("Polling active window")
 
@@ -368,6 +413,13 @@ class MainThing {
           data.title = tabTitle
         }
       }
+    } else if FIREFOX_BROWSERS.contains(frontmost.localizedName ?? "") {
+      debug("Firefox-based browser detected, extracting URL from accessibility tree")
+
+      // note: private windows are not hidden here (unlike the Chrome incognito
+      // branch) — Gecko does not mark them in the accessibility tree, and their
+      // window titles carry a "Private Browsing" suffix for rules to match
+      data.url = geckoURL(window: axElement)
     }
 
     let heartbeat = Heartbeat(timestamp: nowTime, data: data)
