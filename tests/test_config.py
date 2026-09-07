@@ -1,11 +1,19 @@
+import os
 import pathlib
 import re
 import sys
 
 import aw_core.dirs
+import pytest
 import tomlkit
 
 from aw_watcher_window import config as config_module
+
+# The Research Edition release build (release.yml) patches config.py with
+# scripts/patch_research_edition_config.py before running `make test`, which
+# flips research_enabled's default to true. The guards below assert the
+# pristine (non-research) defaults and must not fire on that build.
+RESEARCH_BUILD = os.environ.get("AW_RESEARCH_EDITION") == "true"
 
 
 def _patch_config_dir(monkeypatch, tmp_path):
@@ -65,6 +73,10 @@ def test_research_options_are_read_when_user_sets_them(tmp_path, monkeypatch):
     assert args.research_app_category_map == {"Microsoft Outlook": "Communication"}
 
 
+@pytest.mark.skipif(
+    RESEARCH_BUILD,
+    reason="research edition build patches this default on purpose (release.yml)",
+)
 def test_research_edition_sed_target_is_intact():
     """The Research Edition release build patches this file with sed.
 
@@ -108,6 +120,10 @@ def test_research_edition_sed_target_is_intact():
     assert tomlkit.parse(patched_defaults)["research_enabled"] is True
 
 
+@pytest.mark.skipif(
+    RESEARCH_BUILD,
+    reason="research edition build patches this default on purpose (release.yml)",
+)
 def test_parse_args_defaults_research_off_without_config(tmp_path, monkeypatch):
     """No research keys anywhere => disabled, with empty maps."""
     _patch_config_dir(monkeypatch, tmp_path)
