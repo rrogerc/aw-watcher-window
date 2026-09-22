@@ -202,8 +202,19 @@ encoder.dateEncodingStrategy = .custom({ date, encoder in
   try container.encode(dateString)
 })
 
-start()
-RunLoop.main.run()
+class ActivityWatcherDelegate: NSObject, NSApplicationDelegate {
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    start()
+  }
+}
+
+// Service AppKit events as well as watcher timers and accessibility callbacks.
+// A plain RunLoop leaves app bundles unfinished and marked as not responding.
+let application = NSApplication.shared
+let applicationDelegate = ActivityWatcherDelegate()
+application.delegate = applicationDelegate
+application.setActivationPolicy(.accessory)
+application.run()
 
 func compileExcludeTitlePattern(_ pattern: String) -> NSRegularExpression {
   do {
