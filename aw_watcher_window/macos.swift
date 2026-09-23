@@ -202,6 +202,16 @@ encoder.dateEncodingStrategy = .custom({ date, encoder in
   try container.encode(dateString)
 })
 
+// Talk to aw-server through a session without a URL cache. Its POST responses
+// are never reused, and every heartbeat URL is unique (it carries the
+// pulsetime), so URLSession.shared kept one cache entry per heartbeat and the
+// watcher's memory grew for as long as it ran.
+let urlSession: URLSession = {
+  let configuration = URLSessionConfiguration.default
+  configuration.urlCache = nil
+  return URLSession(configuration: configuration)
+}()
+
 class ActivityWatcherDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     start()
@@ -421,7 +431,7 @@ func createBucket() {
     var urlRequest = URLRequest(url: url)
     urlRequest.httpMethod = "POST"
     urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
-    let (_, response) = try await URLSession.shared.upload(for: urlRequest, from: payload)
+    let (_, response) = try await urlSession.upload(for: urlRequest, from: payload)
     guard (200...299).contains((response as! HTTPURLResponse).statusCode) else {
       log("Failed to create bucket")
       return
@@ -487,7 +497,7 @@ func sendHeartbeatSingle(_ heartbeat: Heartbeat, pulsetime: Double) async throws
   urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
   let payload = try! encoder.encode(heartbeat)
-  let (_, response) = try await URLSession.shared.upload(for: urlRequest, from: payload)
+  let (_, response) = try await urlSession.upload(for: urlRequest, from: payload)
 
   guard (200...299).contains((response as! HTTPURLResponse).statusCode) else {
     throw HeartbeatError.error(msg: "Failed to send heartbeat: \(response)")
